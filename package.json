@@ -1,0 +1,20 @@
+{
+  "name": "inkql",
+  "version": "0.1.0",
+  "description": "inkQL — a query language written in ink. Handwrite on iPad, get magical answers via Google Gemini Vision.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build": "echo \"static site — no build step needed\""
+  },
+  "engines": {
+    "node": ">=18.x"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0"
+  }
+}

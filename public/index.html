@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0a0710" />
+  <title>Magic Book</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="ambience" aria-hidden="true">
+    <span class="mote"></span><span class="mote"></span><span class="mote"></span>
+    <span class="mote"></span><span class="mote"></span><span class="mote"></span>
+  </div>
+
+  <div class="app">
+    <header class="bar">
+      <button class="bar-btn" aria-label="Menu">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </button>
+      <h1>Magic Book</h1>
+      <button class="bar-btn ghost" aria-hidden="true" tabindex="-1">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </button>
+    </header>
+
+    <div class="page">
+      <div class="frame" aria-hidden="true">
+        <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      </div>
+      <canvas id="board"></canvas>
+
+      <div id="spellText" class="spell-text hidden" aria-hidden="true"></div>
+
+      <div id="answerOverlay" class="answer-overlay hidden" role="button" tabindex="0" aria-label="Tap to write another">
+        <div id="transcribed" class="transcribed"></div>
+        <div id="answerText" class="answer-text"></div>
+        <div id="pageNav" class="page-nav hidden">
+          <button id="prevPage" class="page-btn" aria-label="Previous page">‹</button>
+          <span id="pageIndicator" class="page-indicator">1 / 1</span>
+          <button id="nextPage" class="page-btn" aria-label="Next page">›</button>
+        </div>
+        <div class="tap-hint">tap outside to write another</div>
+      </div>
+    </div>
+
+    <footer class="controls">
+      <button id="undo" class="tool">Undo</button>
+      <button id="clear" class="tool">Clear</button>
+      <button id="preview" class="tool">Preview</button>
+      <div class="spacer"></div>
+      <span id="status" class="status"></span>
+      <button id="ask" class="primary">Ask</button>
+    </footer>
+  </div>
+
+  <span id="confidence" hidden></span>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
