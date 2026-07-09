@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "inkQL — a query language written in ink. Handwrite on iPad, get magical answers via Google Gemini Vision.",
   "type": "module",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
