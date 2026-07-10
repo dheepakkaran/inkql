@@ -5,41 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="theme-color" content="#f9f3e2" />
-  <title>My Journal</title>
+  <meta name="theme-color" content="#ffffff" />
+  <title>Journal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Kalam:wght@300;400;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app">
-    <header class="masthead">
-      <button id="menuBtn" class="menu-btn" aria-label="Start a new page">
-        <span></span><span></span><span></span>
-      </button>
-      <div class="masthead-title">
-        <h1>My Journal</h1>
-        <div class="masthead-sub"><span id="dateEl">—</span></div>
+    <header class="topbar">
+      <div class="topbar-left">
+        <button id="menuBtn" class="icon-btn" aria-label="New page">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <line x1="3" y1="5" x2="13" y2="5" />
+            <line x1="3" y1="8" x2="13" y2="8" />
+            <line x1="3" y1="11" x2="13" y2="11" />
+          </svg>
+        </button>
       </div>
-      <div class="masthead-side"></div>
+      <div class="topbar-title">Journal</div>
+      <div class="topbar-right">
+        <span id="dateEl" class="topbar-date">—</span>
+      </div>
     </header>
 
     <main id="feed" class="feed">
-      <div class="notebook">
-        <div class="notebook-margin" aria-hidden="true"></div>
-        <div id="feedInner" class="feed-inner">
-          <div id="emptyState" class="empty-state">
-            <p>The page is blank.</p>
-            <p class="empty-hint">Write your question below.</p>
-          </div>
+      <div id="feedInner" class="feed-inner">
+        <div id="emptyState" class="empty-state">
+          <p>No entries yet.</p>
+          <p class="empty-hint">Write with your pencil below to begin.</p>
         </div>
-        <div id="thinking" class="thinking hidden" aria-hidden="true">
-          <div class="thinking-row">
-            <span class="entry-label">Q</span>
-            <span id="thinkingText" class="thinking-text">the journal listens…</span>
-          </div>
-        </div>
+      </div>
+      <div id="thinking" class="entry thinking hidden" aria-hidden="true">
+        <div class="entry-meta"><span id="thinkingLabel">Thinking</span><span class="thinking-dots"></span></div>
       </div>
     </main>
 
@@ -47,13 +46,13 @@
       <div class="composer-inner">
         <div class="canvas-wrap">
           <canvas id="board"></canvas>
-          <div id="canvasHint" class="canvas-hint">write here</div>
+          <div id="canvasHint" class="canvas-hint">Write here…</div>
         </div>
         <div class="composer-tools">
           <button id="undo" class="tool">Undo</button>
           <button id="clear" class="tool">Clear</button>
           <button id="preview" class="tool">Preview</button>
-          <div class="spacer"></div>
+          <span class="spacer"></span>
           <span id="status" class="status"></span>
           <button id="ask" class="primary">Ask</button>
         </div>
@@ -63,15 +62,9 @@
 
   <template id="entryTemplate">
     <article class="entry">
-      <div class="entry-time"></div>
-      <div class="entry-row entry-q-row">
-        <span class="entry-label">Q</span>
-        <div class="entry-text entry-q"></div>
-      </div>
-      <div class="entry-row entry-a-row">
-        <span class="entry-label">A</span>
-        <div class="entry-text entry-a"></div>
-      </div>
+      <div class="entry-meta"></div>
+      <div class="entry-question"></div>
+      <div class="entry-answer"></div>
     </article>
   </template>
 

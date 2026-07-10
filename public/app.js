@@ -9,32 +9,26 @@ const feedInner = document.getElementById('feedInner');
 const emptyState = document.getElementById('emptyState');
 const entryTemplate = document.getElementById('entryTemplate');
 const thinkingEl = document.getElementById('thinking');
-const thinkingTextEl = document.getElementById('thinkingText');
 const canvasHint = document.getElementById('canvasHint');
+const canvasWrap = canvas.parentElement;
 const dateEl = document.getElementById('dateEl');
 const menuBtn = document.getElementById('menuBtn');
+const askBtn = document.getElementById('ask');
 
-/* Track most recent Q&A pairs (client-side) so follow-up questions inherit
-   context. Kept short to stay under model context limits. */
+/* Client-side conversation history (last N Q&A) — sent with each request so
+   follow-ups inherit context. Kept short to stay under model context limits. */
 const MAX_HISTORY = 4;
 const conversationHistory = [];
 
-const THINKING_PHRASES = [
-  'the journal listens…',
-  'reading your handwriting…',
-  'considering…',
-  'writing an answer…',
-  'the pen is thinking…',
-];
+const INK_COLOR = '#171717';
+const CANVAS_BG = '#ffffff';
 
 const strokes = [];
 let current = null;
 let isAsking = false;
-let thinkingTimer = null;
-let revealAbort = null;
 let entryCount = 0;
 
-const AUTO_SUBMIT_MS = 2000;
+const AUTO_SUBMIT_MS = 2200;
 let autoSubmitTimer = null;
 
 function cancelAutoSubmit() {
@@ -54,7 +48,7 @@ function scheduleAutoSubmit() {
 }
 
 const STROKE_OPTIONS = {
-  size: 2.5,
+  size: 2.4,
   thinning: 0.55,
   smoothing: 0.5,
   streamline: 0.5,
@@ -89,9 +83,8 @@ function getPoint(evt) {
   ];
 }
 
-/* On iPadOS Apple Pencil, `e.buttons` sometimes reports 0 mid-stroke and
-   `pointerleave` fires spuriously. We only trust pointerdown → pointerup /
-   pointercancel with a captured pointerId. */
+/* iPadOS Apple Pencil: buttons==0 mid-stroke and stray pointerleave events
+   would break drawing. Trust only pointerdown → up/cancel with a captured id. */
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   cancelAutoSubmit();
@@ -101,6 +94,7 @@ canvas.addEventListener('pointerdown', (e) => {
   activePointerId = e.pointerId;
   current = { points: [getPoint(e)], pointerType: e.pointerType };
   strokes.push(current);
+  canvasWrap.classList.add('active');
   statusEl.textContent = 'writing';
   redraw();
 });
@@ -117,6 +111,7 @@ function endStroke(e) {
   if (e && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
   current = null;
   activePointerId = null;
+  canvasWrap.classList.remove('active');
   statusEl.textContent = `${strokes.length} stroke${strokes.length === 1 ? '' : 's'}`;
   scheduleAutoSubmit();
 }
@@ -146,11 +141,10 @@ function redraw() {
   const w = canvasRect.width || canvas.clientWidth;
   const h = canvasRect.height || canvas.clientHeight;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#1c2a4a';
+  ctx.fillStyle = INK_COLOR;
   for (const s of strokes) drawStroke(s.points, s.pointerType);
 }
 
-/* Render strokes to an offscreen canvas with baked notebook background. */
 function exportImage() {
   const w = canvasRect.width || canvas.clientWidth;
   const h = canvasRect.height || canvas.clientHeight;
@@ -160,9 +154,9 @@ function exportImage() {
   off.height = Math.round(h * dpr);
   const octx = off.getContext('2d');
   octx.scale(dpr, dpr);
-  octx.fillStyle = '#fdfaf1';
+  octx.fillStyle = CANVAS_BG;
   octx.fillRect(0, 0, w, h);
-  octx.fillStyle = '#1c2a4a';
+  octx.fillStyle = INK_COLOR;
   for (const s of strokes) drawStroke(s.points, s.pointerType, octx);
   return off.toDataURL('image/png');
 }
@@ -174,7 +168,7 @@ function showCanvasHint() {
   if (canvasHint && strokes.length === 0) canvasHint.classList.remove('hidden');
 }
 
-/* -------- Toolbar buttons -------- */
+/* -------- Toolbar -------- */
 
 document.getElementById('undo').addEventListener('click', () => {
   cancelAutoSubmit();
@@ -194,17 +188,17 @@ document.getElementById('clear').addEventListener('click', () => {
 });
 
 document.getElementById('preview').addEventListener('click', () => {
-  if (strokes.length === 0) { statusEl.textContent = 'write something first'; return; }
+  if (strokes.length === 0) { flashStatus('nothing to preview'); return; }
   const url = exportImage();
   const w = window.open('');
-  if (!w) { statusEl.textContent = 'popup blocked'; return; }
-  w.document.write(`<title>Preview</title><body style="margin:0;background:#f2f2f7;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${url}" style="max-width:100%;max-height:100vh"/></body>`);
+  if (!w) { flashStatus('popup blocked'); return; }
+  w.document.write(`<title>Preview</title><body style="margin:0;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${url}" style="max-width:100%;max-height:100vh;box-shadow:0 4px 24px rgba(0,0,0,.12);border-radius:8px"/></body>`);
 });
 
 if (menuBtn) {
   menuBtn.addEventListener('click', () => {
     if (conversationHistory.length === 0 && feedInner.querySelectorAll('.entry').length === 0) {
-      flashStatus('a fresh page');
+      flashStatus('already empty');
       return;
     }
     conversationHistory.length = 0;
@@ -223,14 +217,13 @@ function flashStatus(text, ms = 1500) {
   setTimeout(() => { if (statusEl.textContent === text) statusEl.textContent = ''; }, ms);
 }
 
-/* -------- Gentle ink fade during API call --------
-   No sparks — the ink just softens as the journal thinks. */
+/* -------- Gentle ink fade while waiting on the API -------- */
 
 function gentleFade() {
   const snapshot = strokes.slice();
   const startTime = performance.now();
   const soakDuration = 4200;
-  const finishDuration = 550;
+  const finishDuration = 420;
 
   let finishing = false;
   let finishStart = 0;
@@ -246,7 +239,7 @@ function gentleFade() {
     let alpha;
     if (finishing) {
       const soakT = Math.min(1, (finishStart - startTime) / soakDuration);
-      const baseAlpha = 1 - 0.5 * soakT;
+      const baseAlpha = 1 - 0.55 * soakT;
       const ft = Math.min(1, (now - finishStart) / finishDuration);
       alpha = baseAlpha * (1 - ft);
     } else {
@@ -256,7 +249,7 @@ function gentleFade() {
 
     if (alpha > 0.02) {
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#1c2a4a';
+      ctx.fillStyle = INK_COLOR;
       for (const s of snapshot) drawStroke(s.points, s.pointerType);
       ctx.globalAlpha = 1;
     }
@@ -267,10 +260,8 @@ function gentleFade() {
       if (resolveFinish) { const r = resolveFinish; resolveFinish = null; r(); }
       return;
     }
-
     requestAnimationFrame(frame);
   }
-
   requestAnimationFrame(frame);
 
   return {
@@ -282,37 +273,25 @@ function gentleFade() {
   };
 }
 
-/* -------- Thinking indicator (placeholder entry that appears in feed) -------- */
+/* -------- Thinking indicator -------- */
 
-function showThinking(questionText) {
+function showThinking() {
   if (!thinkingEl) return;
   thinkingEl.classList.remove('hidden');
-  cycleThinkingPhrase();
-  clearInterval(thinkingTimer);
-  thinkingTimer = setInterval(cycleThinkingPhrase, 2400);
   scrollFeedToBottom();
-}
-function cycleThinkingPhrase() {
-  if (!thinkingTextEl) return;
-  const next = THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
-  thinkingTextEl.style.opacity = '0';
-  setTimeout(() => {
-    thinkingTextEl.textContent = next;
-    thinkingTextEl.style.opacity = '';
-  }, 250);
 }
 function hideThinking() {
   if (thinkingEl) thinkingEl.classList.add('hidden');
-  clearInterval(thinkingTimer);
-  thinkingTimer = null;
 }
 
 /* -------- Feed / entry rendering -------- */
 
-function formatTime(d) {
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
+function formatMeta(d) {
+  const month = d.toLocaleString(undefined, { month: 'short' });
+  const day = d.getDate();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${month} ${day} · ${hh}:${mm}`;
 }
 
 function scrollFeedToBottom(smooth = true) {
@@ -321,7 +300,7 @@ function scrollFeedToBottom(smooth = true) {
   });
 }
 
-function appendEntry({ question, provider, confidence }) {
+function appendEntry({ question }) {
   if (emptyState && !emptyState.classList.contains('hidden')) {
     emptyState.classList.add('hidden');
   }
@@ -329,60 +308,15 @@ function appendEntry({ question, provider, confidence }) {
 
   const frag = entryTemplate.content.cloneNode(true);
   const article = frag.querySelector('.entry');
-  const timeEl = frag.querySelector('.entry-time');
-  const qEl = frag.querySelector('.entry-q');
-  const aEl = frag.querySelector('.entry-a');
+  const metaEl = frag.querySelector('.entry-meta');
+  const qEl = frag.querySelector('.entry-question');
+  const aEl = frag.querySelector('.entry-answer');
 
-  timeEl.textContent = `${formatTime(new Date())} · Entry ${entryCount}`;
-  qEl.textContent = question || '(illegible)';
+  metaEl.textContent = `${formatMeta(new Date())} · #${entryCount}`;
+  qEl.textContent = question || '(unreadable)';
 
-  if (thinkingEl && !thinkingEl.classList.contains('hidden')) {
-    feedInner.insertBefore(article, thinkingEl.nextSibling); // shouldn't happen, but safe
-  }
   feedInner.appendChild(article);
-
   return { article, aEl };
-}
-
-function markEntryError(aEl, message) {
-  aEl.classList.add('error');
-  aEl.textContent = message || 'Something went wrong.';
-}
-
-/* -------- Char-by-char pencil reveal for the answer -------- */
-
-const sleep = (ms, signal) => new Promise((resolve, reject) => {
-  const t = setTimeout(resolve, ms);
-  if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(new Error('aborted')); }, { once: true });
-});
-
-function pauseFor(char) {
-  if (char === ' ') return 22;
-  if (char === ',' || char === ';' || char === ':') return 160;
-  if (char === '.' || char === '!' || char === '?') return 260;
-  if (char === '\n') return 200;
-  return 28 + Math.random() * 22;
-}
-
-async function revealInk(el, text, signal) {
-  el.innerHTML = '';
-  const shouldFollowScroll = () => {
-    const nearBottom = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight < 120;
-    return nearBottom;
-  };
-  for (const ch of text) {
-    if (signal?.aborted) return;
-    if (ch === '\n') {
-      el.appendChild(document.createElement('br'));
-    } else {
-      const span = document.createElement('span');
-      span.className = 'char' + (ch === ' ' ? ' space' : '');
-      span.textContent = ch;
-      el.appendChild(span);
-    }
-    if (shouldFollowScroll()) scrollFeedToBottom(false);
-    try { await sleep(pauseFor(ch), signal); } catch { return; }
-  }
 }
 
 /* -------- Ask -------- */
@@ -391,11 +325,12 @@ async function askBook() {
   cancelAutoSubmit();
   if (isAsking) return;
   if (strokes.length === 0) {
-    statusEl.textContent = 'write something first';
+    flashStatus('write something first');
     return;
   }
 
   isAsking = true;
+  askBtn.disabled = true;
   statusEl.textContent = '';
   showThinking();
 
@@ -422,48 +357,42 @@ async function askBook() {
 
     confidenceEl.textContent = `${data.confidence || '—'} · via ${data.provider || 'gemini'}`;
 
-    const { aEl } = appendEntry({
-      question: data.transcribed,
-      provider: data.provider,
-      confidence: data.confidence,
-    });
+    const { aEl } = appendEntry({ question: data.transcribed });
 
     if (data.transcribed && data.answer) {
       conversationHistory.push({ question: data.transcribed, answer: data.answer });
       while (conversationHistory.length > MAX_HISTORY) conversationHistory.shift();
     }
 
+    aEl.textContent = data.answer || '';
+    /* whole-block fade: rAF so the class flip triggers the transition */
+    requestAnimationFrame(() => aEl.classList.add('revealed'));
+
     scrollFeedToBottom();
-
-    /* Small pause so the reader sees their question written down first,
-       then the "A" appears letter by letter like a pencil answering. */
-    await sleep(500).catch(() => {});
-
-    const controller = new AbortController();
-    revealAbort = () => controller.abort();
-    await revealInk(aEl, data.answer || '', controller.signal);
   } catch (err) {
     hideThinking();
-    const { aEl } = appendEntry({ question: '(the pen slipped)' });
-    markEntryError(aEl, err.message || 'Something went wrong.');
+    const { aEl } = appendEntry({ question: '—' });
+    aEl.classList.add('error', 'revealed');
+    aEl.textContent = err.message || 'Something went wrong.';
     strokes.length = 0;
     redraw();
     showCanvasHint();
   } finally {
     isAsking = false;
+    askBtn.disabled = false;
     statusEl.textContent = '';
     scrollFeedToBottom();
   }
 }
 
-document.getElementById('ask').addEventListener('click', askBook);
+askBtn.addEventListener('click', askBook);
 
-/* -------- Date in masthead -------- */
+/* -------- Date in topbar -------- */
 
 function updateDate() {
   if (!dateEl) return;
   const d = new Date();
-  const opts = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+  const opts = { month: 'short', day: 'numeric', year: 'numeric' };
   dateEl.textContent = d.toLocaleDateString(undefined, opts);
 }
 updateDate();
