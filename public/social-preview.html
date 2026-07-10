@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>inkQL — social preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ============================================================
+       inkQL social preview — 1280 × 640
+       Open this file in a browser, then EITHER:
+       (a) DevTools → Cmd/Ctrl+Shift+P → "Capture node screenshot"
+           (right-click the .card element in the Elements panel first),
+       (b) or use the "Capture full size screenshot" command with the
+           viewport set to exactly 1280×640,
+       (c) or use any HTML-to-PNG tool (e.g. screely, htmlcsstoimage).
+       Upload the resulting PNG at GitHub → Settings → Social preview.
+       ============================================================ */
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      background: #ececec;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #171717;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .card {
+      width: 1280px;
+      height: 640px;
+      background: #ffffff;
+      position: relative;
+      overflow: hidden;
+      padding: 80px 96px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Very subtle grid so it doesn't feel like pure white */
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(to right, rgba(23, 23, 23, 0.03) 1px, transparent 1px);
+      background-size: 80px 100%;
+      pointer-events: none;
+    }
+
+    /* Giant watermark stroke bottom-right */
+    .watermark {
+      position: absolute;
+      right: -60px;
+      bottom: -180px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: 640px;
+      line-height: 1;
+      color: #171717;
+      opacity: 0.045;
+      letter-spacing: -30px;
+      pointer-events: none;
+      transform: rotate(-6deg);
+    }
+
+    /* --- Brand row (top) --- */
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      color: #171717;
+      position: relative;
+      z-index: 1;
+    }
+    .brand-dot {
+      width: 14px;
+      height: 14px;
+      background: #171717;
+      border-radius: 50%;
+    }
+    .brand-meta {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 14px;
+      color: #737373;
+      letter-spacing: 0;
+    }
+
+    /* --- Middle: headline + tagline --- */
+
+    .stack {
+      position: relative;
+      z-index: 1;
+    }
+
+    .eyebrow {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px;
+      font-weight: 500;
+      color: #737373;
+      letter-spacing: 3.5px;
+      text-transform: uppercase;
+      margin-bottom: 22px;
+    }
+
+    .headline {
+      font-family: 'Inter', sans-serif;
+      font-weight: 800;
+      font-size: 108px;
+      line-height: 1.02;
+      letter-spacing: -4.5px;
+      color: #171717;
+    }
+    .headline .accent {
+      color: #a3a3a3;
+    }
+
+    .tagline {
+      margin-top: 28px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 400;
+      font-size: 24px;
+      line-height: 1.45;
+      color: #525252;
+      max-width: 900px;
+      letter-spacing: -0.1px;
+    }
+
+    /* --- Bottom: chips + URL --- */
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .chips {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .chip {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border: 1px solid #e5e5e5;
+      border-radius: 999px;
+      color: #404040;
+      letter-spacing: 0.2px;
+      background: #fafafa;
+    }
+
+    .url {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 15px;
+      font-weight: 500;
+      color: #171717;
+      padding: 8px 16px;
+      background: #171717;
+      color: #ffffff;
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="watermark">?</div>
+
+    <div class="brand">
+      <span class="brand-dot"></span>
+      inkQL
+      <span class="brand-meta">github.com/dheepakkaran/inkql</span>
+    </div>
+
+    <div class="stack">
+      <div class="eyebrow">Vision LLM · iPad · Apple Pencil</div>
+      <h1 class="headline">
+        Handwrite.<br />
+        Ask.<span class="accent"> Answered.</span>
+      </h1>
+      <p class="tagline">
+        A handwriting-first Q&amp;A app for iPad. Apple Pencil ink in — structured, context-aware answers out. Zero build step, vanilla ES modules, dual-provider vision LLM (Gemini 2.5 &amp; GPT-4o).
+      </p>
+    </div>
+
+    <div class="footer">
+      <div class="chips">
+        <span class="chip">Gemini 2.5</span>
+        <span class="chip">GPT-4o</span>
+        <span class="chip">Vercel</span>
+        <span class="chip">Express</span>
+        <span class="chip">Canvas 2D</span>
+        <span class="chip">iPad Safari</span>
+      </div>
+      <span class="url">inkql.vercel.app</span>
+    </div>
+  </div>
+</body>
+</html>

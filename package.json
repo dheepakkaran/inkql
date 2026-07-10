@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "build": "echo \"static site — no build step needed\""
+    "build": "echo \"static site — no build step needed\"",
+    "social:png": "node scripts/generate-social-preview.js"
   },
   "engines": {
     "node": ">=18.x"
