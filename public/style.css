@@ -1,5 +1,14 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* iPad / touch-device sanity */
+html, body {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+button { touch-action: manipulation; }
+
 :root {
   --bg: #0a0710;
   --bg-panel: #14101a;
@@ -100,8 +109,10 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  height: 56px;
+  padding: env(safe-area-inset-top) 20px 0 20px;
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+  min-height: 56px;
   background: var(--bg-panel);
   z-index: 3;
 }
@@ -129,7 +140,9 @@ body::before {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 10px;
+  padding: 12px;
+  min-width: 44px;
+  min-height: 44px;
   background: none;
   border: none;
   cursor: pointer;
@@ -156,14 +169,74 @@ body::before {
   display: flex;
   overflow: hidden;
   padding: 14px;
+  padding-left: max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
   background: var(--bg);
   z-index: 1;
+  perspective: 2200px;
+  perspective-origin: 50% 40%;
 }
+
+/* -------- Book (spine + page curl decorations under the parchment) -------- */
+
+.book {
+  position: absolute;
+  inset: 12px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.book-spine {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: -2px;
+  width: 22px;
+  background:
+    linear-gradient(90deg,
+      #1a0e05 0%,
+      #3b2410 30%,
+      #5a3617 55%,
+      #2c1a09 80%,
+      #120802 100%);
+  border-radius: 5px 2px 2px 5px;
+  box-shadow:
+    inset -2px 0 6px rgba(0, 0, 0, 0.55),
+    inset 2px 0 3px rgba(212, 168, 84, 0.15),
+    4px 0 12px rgba(0, 0, 0, 0.5);
+}
+.book-spine::before,
+.book-spine::after {
+  content: '';
+  position: absolute;
+  left: 4px; right: 4px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(212, 168, 84, 0.6), transparent);
+  box-shadow: 0 0 4px rgba(212, 168, 84, 0.35);
+}
+.book-spine::before { top: 16%; }
+.book-spine::after  { bottom: 16%; }
+
+/* Subtle page-corner shading — hint that the parchment is a page you can lift */
+.page-curl {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.page-curl-tl { top: 0; left: 22px; background: radial-gradient(circle at top left, rgba(107, 63, 29, 0.35), transparent 70%); }
+.page-curl-tr { top: 0; right: 0;   background: radial-gradient(circle at top right, rgba(107, 63, 29, 0.35), transparent 70%); }
+.page-curl-bl { bottom: 0; left: 22px; background: radial-gradient(circle at bottom left, rgba(107, 63, 29, 0.35), transparent 70%); }
+.page-curl-br { bottom: 0; right: 0;   background: radial-gradient(circle at bottom right, rgba(107, 63, 29, 0.35), transparent 70%); }
 
 /* Thin gold frame with L-bracket corners around the parchment */
 .frame {
   position: absolute;
-  inset: 12px;
+  top: 12px;
+  bottom: 12px;
+  left: 30px;
+  right: 12px;
   border: 1px solid var(--border-gold);
   pointer-events: none;
   z-index: 4;
@@ -189,7 +262,11 @@ body::before {
 #board {
   flex: 1;
   width: 100%;
+  margin-left: 18px;
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
   cursor: crosshair;
   display: block;
   background-color: var(--parchment);
@@ -198,7 +275,9 @@ body::before {
     radial-gradient(ellipse at 20% 20%, rgba(212, 168, 84, 0.12), transparent 60%),
     radial-gradient(ellipse at 80% 80%, rgba(107, 63, 29, 0.1), transparent 60%),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4 0 0 0 0 0.28 0 0 0 0 0.12 0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  box-shadow: inset 0 0 90px rgba(107, 63, 29, 0.32);
+  box-shadow:
+    inset 20px 0 30px -12px rgba(50, 25, 10, 0.55),
+    inset 0 0 90px rgba(107, 63, 29, 0.32);
 }
 
 /* -------- Bottom controls -------- */
@@ -208,8 +287,8 @@ body::before {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
-  height: 60px;
+  padding: 10px 20px calc(10px + env(safe-area-inset-bottom)) 20px;
+  min-height: 60px;
   background: var(--bg-panel);
   z-index: 3;
 }
@@ -225,7 +304,8 @@ body::before {
 .spacer { flex: 1; }
 
 .tool {
-  padding: 8px 14px;
+  padding: 10px 16px;
+  min-height: 44px;
   font-family: var(--serif);
   font-size: 15px;
   font-weight: 500;
@@ -246,7 +326,8 @@ body::before {
 .tool:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .primary {
-  padding: 8px 28px;
+  padding: 10px 30px;
+  min-height: 44px;
   font-family: var(--serif);
   font-size: 16px;
   font-weight: 600;
@@ -316,40 +397,130 @@ body::before {
   50%      { text-shadow: 0 0 22px rgba(212, 168, 84, 0.9), 0 0 40px rgba(212, 168, 84, 0.5); }
 }
 
-/* -------- Answer overlay (opens over parchment) -------- */
+/* -------- Answer overlay (opens over parchment as a page flip) -------- */
 
 .answer-overlay {
   position: absolute;
-  inset: 14px;
-  padding: 44px 52px 92px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  cursor: pointer;
-  background:
-    radial-gradient(ellipse at center, transparent 40%, rgba(107, 63, 29, 0.2) 100%),
-    var(--parchment);
+  top: 12px;
+  bottom: 12px;
+  left: 30px;
+  right: 12px;
   z-index: 5;
-  animation: pageBloom 700ms cubic-bezier(.22,.61,.36,1) both;
-  overflow: hidden;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  perspective: 2200px;
 }
 .answer-overlay.hidden { display: none; }
 
-.answer-overlay::before {
+.book-page {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 12% 50%, rgba(107, 63, 29, 0.28), transparent 55%),
+    radial-gradient(ellipse at center, transparent 40%, rgba(107, 63, 29, 0.2) 100%),
+    var(--parchment);
+  box-shadow:
+    inset 22px 0 32px -14px rgba(50, 25, 10, 0.55),
+    inset 0 0 90px rgba(107, 63, 29, 0.32),
+    0 12px 40px rgba(0, 0, 0, 0.35);
+  transform-style: preserve-3d;
+  transform-origin: left center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+  overflow: hidden;
+}
+
+/* Opening: the new page swings in from the right like turning a page open */
+.answer-overlay.opening .book-page {
+  animation: pageOpenFlip 780ms cubic-bezier(.22,.61,.36,1) both;
+}
+/* Closing: fold the page back away to the right */
+.answer-overlay.closing .book-page {
+  animation: pageCloseFlip 320ms cubic-bezier(.55,.06,.68,.19) both;
+}
+/* Multi-page nav — forward = new page swings in from the right */
+.answer-overlay .book-page.flip-forward {
+  animation: pageTurnForward 360ms cubic-bezier(.4,.06,.35,1) both;
+}
+.answer-overlay .book-page.flip-backward {
+  animation: pageTurnBackward 360ms cubic-bezier(.4,.06,.35,1) both;
+}
+
+@keyframes pageOpenFlip {
+  0% {
+    transform: rotateY(-92deg);
+    opacity: 0.15;
+    box-shadow: inset 100px 0 50px -30px rgba(30, 15, 5, 0.9);
+  }
+  55% { opacity: 1; }
+  100% {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+}
+@keyframes pageCloseFlip {
+  0% { transform: rotateY(0deg); opacity: 1; }
+  100% { transform: rotateY(-72deg); opacity: 0; }
+}
+@keyframes pageTurnForward {
+  0%   { transform: rotateY(0deg); }
+  45%  { box-shadow: inset -60px 0 40px -20px rgba(30,15,5,0.6), 0 12px 40px rgba(0,0,0,0.4); }
+  50%  { transform: rotateY(-88deg); opacity: 0.35; }
+  50.01% { transform: rotateY(88deg); opacity: 0.35; }
+  100% { transform: rotateY(0deg); }
+}
+@keyframes pageTurnBackward {
+  0%   { transform: rotateY(0deg); }
+  50%  { transform: rotateY(88deg); opacity: 0.35; }
+  50.01% { transform: rotateY(-88deg); opacity: 0.35; }
+  100% { transform: rotateY(0deg); }
+}
+
+.book-page-inner {
+  position: absolute;
+  inset: 0;
+  padding: 40px 52px 92px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.page-ornament {
+  text-align: center;
+  color: rgba(107, 63, 29, 0.4);
+  font-family: var(--title-font);
+  font-size: 14px;
+  letter-spacing: 8px;
+  flex: 0 0 auto;
+  animation: fadeIn 900ms ease 350ms both;
+}
+.page-ornament.top    { margin-bottom: 2px; }
+.page-ornament.bottom { margin-top: auto; margin-bottom: 8px; }
+
+.answer-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-right: 4px;
+}
+.answer-scroll::-webkit-scrollbar { width: 6px; }
+.answer-scroll::-webkit-scrollbar-thumb { background: rgba(107, 63, 29, 0.35); border-radius: 3px; }
+
+.book-page::before {
   content: '';
   position: absolute;
   inset: 0;
   background: radial-gradient(circle at 50% 40%,
-    rgba(253, 246, 227, 0.7) 0%,
-    rgba(212, 168, 84, 0.28) 18%,
+    rgba(253, 246, 227, 0.5) 0%,
+    rgba(212, 168, 84, 0.22) 18%,
     transparent 55%);
   pointer-events: none;
   animation: burst 1400ms ease-out both;
-}
-
-@keyframes pageBloom {
-  from { opacity: 0; transform: scale(0.99); }
-  to   { opacity: 1; transform: scale(1); }
 }
 
 @keyframes burst {
@@ -386,6 +557,28 @@ body::before {
 }
 .answer-text.error { color: #7a1a1a; }
 .answer-text.flipping { opacity: 0; }
+
+/* Follow-up hint — sits above the page controls when history exists */
+.follow-up {
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  z-index: 4;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: 3px;
+  text-transform: lowercase;
+  color: rgba(107, 63, 29, 0.7);
+  padding: 6px 12px;
+  border: 1px solid rgba(107, 63, 29, 0.25);
+  border-radius: 20px;
+  background: rgba(255, 245, 220, 0.55);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+.follow-up.hidden { opacity: 0; }
 
 /* Char-by-char magical ink reveal (gold spark → dark ink) */
 .answer-text .char {
@@ -435,13 +628,13 @@ body::before {
 .page-nav.hidden { display: none; }
 
 .page-btn {
-  width: 46px;
-  height: 46px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   border: 1px solid rgba(107, 63, 29, 0.5);
   background: rgba(255, 245, 220, 0.7);
   color: rgba(74, 40, 12, 0.85);
-  font-size: 26px;
+  font-size: 28px;
   line-height: 1;
   cursor: pointer;
   transition: all 220ms ease;
@@ -452,6 +645,7 @@ body::before {
   font-family: var(--serif);
   backdrop-filter: blur(4px);
   box-shadow: 0 2px 10px rgba(20, 12, 4, 0.15);
+  touch-action: manipulation;
 }
 .page-btn:hover:not(:disabled) {
   color: #4a280c;
@@ -500,4 +694,22 @@ body::before {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* -------- iPad / tablet layout tweaks -------- */
+
+@media (min-width: 700px) and (pointer: coarse) {
+  .bar h1 { font-size: 20px; letter-spacing: 8px; }
+  .tool { font-size: 17px; padding: 12px 18px; }
+  .primary { font-size: 17px; padding: 12px 34px; }
+  .answer-text { font-size: 30px; }
+  .book-page-inner { padding: 52px 68px 108px 76px; }
+  .page-btn { width: 60px; height: 60px; font-size: 32px; }
+  .transcribed { font-size: 17px; }
+}
+
+/* Landscape iPad — give a hint more horizontal breathing room */
+@media (min-width: 900px) and (pointer: coarse) and (orientation: landscape) {
+  .book-page-inner { padding: 56px 96px 120px 96px; }
+  .answer-text { max-width: 900px; }
 }

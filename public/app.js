@@ -1,7 +1,7 @@
 import { getStroke } from 'https://esm.sh/perfect-freehand@1.2.2';
 
 const canvas = document.getElementById('board');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { desynchronized: true });
 const status = document.getElementById('status');
 const answerOverlay = document.getElementById('answerOverlay');
 const transcribedEl = document.getElementById('transcribed');
@@ -12,6 +12,14 @@ const pageNav = document.getElementById('pageNav');
 const prevPageBtn = document.getElementById('prevPage');
 const nextPageBtn = document.getElementById('nextPage');
 const pageIndicator = document.getElementById('pageIndicator');
+const answerScroll = document.getElementById('answerScroll');
+const bookPage = document.getElementById('bookPage');
+const followUpEl = document.getElementById('followUp');
+
+/* Track most recent Q&A pairs (client-side) so the book can answer follow-up
+   questions with context. Kept short to stay under model context limits. */
+const MAX_HISTORY = 4;
+const conversationHistory = [];
 
 const SPELL_PHRASES = [
   'the ink stirs',
@@ -61,25 +69,37 @@ const STROKE_OPTIONS = {
   last: true,
 };
 
+let canvasRect = { left: 0, top: 0, width: 0, height: 0 };
+let activePointerId = null;
+
+function refreshCanvasRect() {
+  canvasRect = canvas.getBoundingClientRect();
+}
+
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = Math.round(rect.width * dpr);
-  canvas.height = Math.round(rect.height * dpr);
+  refreshCanvasRect();
+  const w = Math.max(1, canvasRect.width);
+  const h = Math.max(1, canvasRect.height);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
   redraw();
 }
 
 function getPoint(evt) {
-  const rect = canvas.getBoundingClientRect();
   return [
-    evt.clientX - rect.left,
-    evt.clientY - rect.top,
+    evt.clientX - canvasRect.left,
+    evt.clientY - canvasRect.top,
     evt.pressure && evt.pressure > 0 ? evt.pressure : 0.5,
   ];
 }
 
+/* On iPadOS Apple Pencil, `e.buttons` sometimes reports 0 mid-stroke and
+   `pointerleave` fires spuriously. We only trust pointerdown → pointerup /
+   pointercancel with a captured pointerId. That + a cached bounding rect is
+   what fixed strokes not appearing on iPad. */
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   cancelAutoSubmit();
@@ -87,7 +107,9 @@ canvas.addEventListener('pointerdown', (e) => {
     dismissAnswer();
     return;
   }
-  canvas.setPointerCapture(e.pointerId);
+  refreshCanvasRect();
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
+  activePointerId = e.pointerId;
   current = { points: [getPoint(e)], pointerType: e.pointerType };
   strokes.push(current);
   status.textContent = 'writing';
@@ -95,21 +117,27 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointermove', (e) => {
-  if (!current || e.buttons === 0) return;
+  if (!current || e.pointerId !== activePointerId) return;
   const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
   for (const ev of events) current.points.push(getPoint(ev));
   redraw();
 });
 
-function endStroke() {
+function endStroke(e) {
   if (!current) return;
+  if (e && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
   current = null;
+  activePointerId = null;
   status.textContent = `${strokes.length} stroke${strokes.length === 1 ? '' : 's'}`;
   scheduleAutoSubmit();
 }
 canvas.addEventListener('pointerup', endStroke);
 canvas.addEventListener('pointercancel', endStroke);
-canvas.addEventListener('pointerleave', endStroke);
+
+/* Block iOS default gestures inside the writing surface */
+['touchstart', 'touchmove', 'gesturestart', 'gesturechange', 'gestureend'].forEach((t) => {
+  canvas.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+});
 
 function drawStroke(points, pointerType, targetCtx = ctx) {
   const opts = { ...STROKE_OPTIONS };
@@ -127,8 +155,9 @@ function drawStroke(points, pointerType, targetCtx = ctx) {
 }
 
 function redraw() {
-  const rect = canvas.getBoundingClientRect();
-  ctx.clearRect(0, 0, rect.width, rect.height);
+  const w = canvasRect.width || canvas.clientWidth;
+  const h = canvasRect.height || canvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#2a1a08';
   for (const s of strokes) drawStroke(s.points, s.pointerType);
 }
@@ -136,15 +165,16 @@ function redraw() {
 /* Render strokes to an offscreen canvas with baked paper background.
    Renders from `strokes` array, independent of live canvas — safe during dissolve. */
 function exportImage() {
-  const rect = canvas.getBoundingClientRect();
+  const w = canvasRect.width || canvas.clientWidth;
+  const h = canvasRect.height || canvas.clientHeight;
   const dpr = window.devicePixelRatio || 1;
   const off = document.createElement('canvas');
-  off.width = Math.round(rect.width * dpr);
-  off.height = Math.round(rect.height * dpr);
+  off.width = Math.round(w * dpr);
+  off.height = Math.round(h * dpr);
   const octx = off.getContext('2d');
   octx.scale(dpr, dpr);
   octx.fillStyle = '#efe1c0';
-  octx.fillRect(0, 0, rect.width, rect.height);
+  octx.fillRect(0, 0, w, h);
   octx.fillStyle = '#1c1c1e';
   for (const s of strokes) drawStroke(s.points, s.pointerType, octx);
   return off.toDataURL('image/png');
@@ -167,6 +197,22 @@ document.getElementById('clear').addEventListener('click', () => {
   status.textContent = '';
 });
 
+const menuBtn = document.querySelector('.bar-btn:not(.ghost)');
+if (menuBtn) {
+  menuBtn.addEventListener('click', () => {
+    if (conversationHistory.length === 0) {
+      status.textContent = 'a fresh page';
+    } else {
+      conversationHistory.length = 0;
+      updateFollowUpHint();
+      status.textContent = 'a new chapter begins';
+    }
+    setTimeout(() => { if (status.textContent === 'a new chapter begins' || status.textContent === 'a fresh page') status.textContent = ''; }, 1600);
+  });
+  menuBtn.setAttribute('aria-label', 'Start a new chapter');
+  menuBtn.title = 'Start a new chapter';
+}
+
 document.getElementById('preview').addEventListener('click', () => {
   const url = exportImage();
   const w = window.open('');
@@ -176,14 +222,19 @@ document.getElementById('preview').addEventListener('click', () => {
 
 function dismissAnswer() {
   if (revealAbort) revealAbort();
-  answerOverlay.classList.add('hidden');
-  answerTextEl.innerHTML = '';
-  answerTextEl.classList.remove('error', 'flipping');
-  transcribedEl.textContent = '';
-  pageNav.classList.add('hidden');
-  responsePages = [];
-  currentPageIdx = 0;
-  status.textContent = '';
+  answerOverlay.classList.add('closing');
+  const finish = () => {
+    answerOverlay.classList.remove('closing', 'opening');
+    answerOverlay.classList.add('hidden');
+    answerTextEl.innerHTML = '';
+    answerTextEl.classList.remove('error', 'flipping');
+    transcribedEl.textContent = '';
+    pageNav.classList.add('hidden');
+    responsePages = [];
+    currentPageIdx = 0;
+    status.textContent = '';
+  };
+  setTimeout(finish, 340);
 }
 
 answerOverlay.addEventListener('click', (e) => {
@@ -560,10 +611,16 @@ async function showPage(idx) {
   if (idx < 0 || idx >= responsePages.length) return;
   if (revealAbort) revealAbort();
 
-  const isSameIndex = idx === currentPageIdx && answerTextEl.innerHTML !== '';
-  if (!isSameIndex && answerTextEl.innerHTML !== '') {
-    answerTextEl.classList.add('flipping');
-    await sleep(220).catch(() => {});
+  const previousIdx = currentPageIdx;
+  const isSameIndex = idx === previousIdx && answerTextEl.innerHTML !== '';
+
+  if (!isSameIndex && answerTextEl.innerHTML !== '' && bookPage) {
+    const direction = idx > previousIdx ? 'forward' : 'backward';
+    bookPage.classList.remove('flip-forward', 'flip-backward');
+    void bookPage.offsetWidth;
+    bookPage.classList.add(direction === 'forward' ? 'flip-forward' : 'flip-backward');
+    await sleep(360).catch(() => {});
+    bookPage.classList.remove('flip-forward', 'flip-backward');
   }
 
   currentPageIdx = idx;
@@ -571,6 +628,7 @@ async function showPage(idx) {
 
   answerTextEl.innerHTML = '';
   answerTextEl.classList.remove('flipping');
+  if (answerScroll) answerScroll.scrollTop = 0;
 
   const controller = new AbortController();
   revealAbort = () => controller.abort();
@@ -607,7 +665,7 @@ async function askBook() {
     const res = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image }),
+      body: JSON.stringify({ image, history: conversationHistory }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -627,8 +685,19 @@ async function askBook() {
     responsePages = splitIntoPages(data.answer || '');
     currentPageIdx = 0;
     answerTextEl.innerHTML = '';
+
+    /* Remember this exchange so the next question inherits context.
+       Skip empty/error transcriptions to keep the history clean. */
+    if (data.transcribed && data.answer) {
+      conversationHistory.push({ question: data.transcribed, answer: data.answer });
+      while (conversationHistory.length > MAX_HISTORY) conversationHistory.shift();
+    }
+    updateFollowUpHint();
+
     answerOverlay.classList.remove('hidden');
+    answerOverlay.classList.add('opening');
     answerOverlay.focus?.();
+    setTimeout(() => answerOverlay.classList.remove('opening'), 900);
 
     await showPage(0);
   } catch (err) {
@@ -647,8 +716,28 @@ async function askBook() {
   }
 }
 
+function updateFollowUpHint() {
+  if (!followUpEl) return;
+  if (conversationHistory.length === 0) {
+    followUpEl.classList.add('hidden');
+    followUpEl.textContent = '';
+  } else {
+    followUpEl.classList.remove('hidden');
+    followUpEl.textContent = `chapter ${conversationHistory.length} · ask a follow-up`;
+  }
+}
+
 document.getElementById('ask').addEventListener('click', askBook);
 
+/* Keep the canvas backing store in sync with layout. On iPad, the initial
+   getBoundingClientRect() may fire before flex layout resolves — a
+   ResizeObserver gives us the real dimensions the moment they change. */
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+if (typeof ResizeObserver !== 'undefined') {
+  const ro = new ResizeObserver(() => resize());
+  ro.observe(canvas);
+}
+requestAnimationFrame(() => requestAnimationFrame(resize));
 resize();
 status.textContent = '';

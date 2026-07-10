@@ -58,7 +58,7 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'rate_limit', message: 'The book rests. Return in a moment.' });
   }
 
-  const { image } = req.body || {};
-  const result = await handleAsk(image);
+  const { image, history } = req.body || {};
+  const result = await handleAsk(image, history);
   return res.status(result.status).json(result.body);
 }

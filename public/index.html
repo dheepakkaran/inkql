@@ -30,16 +30,33 @@
     </header>
 
     <div class="page">
+      <div class="book" aria-hidden="true">
+        <div class="book-spine"></div>
+        <i class="page-curl page-curl-tl"></i>
+        <i class="page-curl page-curl-tr"></i>
+        <i class="page-curl page-curl-bl"></i>
+        <i class="page-curl page-curl-br"></i>
+      </div>
+
       <div class="frame" aria-hidden="true">
         <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
       </div>
       <canvas id="board"></canvas>
 
       <div id="spellText" class="spell-text hidden" aria-hidden="true"></div>
+      <div id="followUp" class="follow-up hidden" aria-hidden="true"></div>
 
       <div id="answerOverlay" class="answer-overlay hidden" role="button" tabindex="0" aria-label="Tap to write another">
-        <div id="transcribed" class="transcribed"></div>
-        <div id="answerText" class="answer-text"></div>
+        <div id="bookPage" class="book-page">
+          <div class="book-page-inner">
+            <div class="page-ornament top" aria-hidden="true">✦</div>
+            <div id="answerScroll" class="answer-scroll">
+              <div id="transcribed" class="transcribed"></div>
+              <div id="answerText" class="answer-text"></div>
+            </div>
+            <div class="page-ornament bottom" aria-hidden="true">✦</div>
+          </div>
+        </div>
         <div id="pageNav" class="page-nav hidden">
           <button id="prevPage" class="page-btn" aria-label="Previous page">‹</button>
           <span id="pageIndicator" class="page-indicator">1 / 1</span>

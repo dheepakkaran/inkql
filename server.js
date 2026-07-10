@@ -76,8 +76,8 @@ const perDayLimiter = rateLimit({
 });
 
 app.post('/api/ask', perDayLimiter, perMinuteLimiter, async (req, res) => {
-  const { image } = req.body || {};
-  const result = await handleAsk(image);
+  const { image, history } = req.body || {};
+  const result = await handleAsk(image, history);
   res.status(result.status).json(result.body);
 });
 
