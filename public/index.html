@@ -49,18 +49,18 @@
       <div id="answerOverlay" class="answer-overlay hidden" role="button" tabindex="0" aria-label="Tap to write another">
         <div id="bookPage" class="book-page">
           <div class="book-page-inner">
-            <div class="page-ornament top" aria-hidden="true">✦</div>
+            <div class="page-ornament top" aria-hidden="true">✦ ❦ ✦</div>
             <div id="answerScroll" class="answer-scroll">
-              <div id="transcribed" class="transcribed"></div>
-              <div id="answerText" class="answer-text"></div>
+              <div class="qa-block">
+                <div class="qa-label">you wrote</div>
+                <div id="transcribed" class="qa-question"></div>
+                <div class="qa-divider" aria-hidden="true"><span>❦</span></div>
+                <div class="qa-label">the book answers</div>
+                <div id="answerText" class="qa-answer"></div>
+              </div>
             </div>
-            <div class="page-ornament bottom" aria-hidden="true">✦</div>
+            <div class="page-ornament bottom" aria-hidden="true">✦ ❦ ✦</div>
           </div>
-        </div>
-        <div id="pageNav" class="page-nav hidden">
-          <button id="prevPage" class="page-btn" aria-label="Previous page">‹</button>
-          <span id="pageIndicator" class="page-indicator">1 / 1</span>
-          <button id="nextPage" class="page-btn" aria-label="Next page">›</button>
         </div>
         <div class="tap-hint">tap outside to write another</div>
       </div>

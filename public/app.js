@@ -8,10 +8,6 @@ const transcribedEl = document.getElementById('transcribed');
 const confidenceEl = document.getElementById('confidence');
 const answerTextEl = document.getElementById('answerText');
 const spellTextEl = document.getElementById('spellText');
-const pageNav = document.getElementById('pageNav');
-const prevPageBtn = document.getElementById('prevPage');
-const nextPageBtn = document.getElementById('nextPage');
-const pageIndicator = document.getElementById('pageIndicator');
 const answerScroll = document.getElementById('answerScroll');
 const bookPage = document.getElementById('bookPage');
 const followUpEl = document.getElementById('followUp');
@@ -37,9 +33,6 @@ let current = null;
 let isAsking = false;
 let spellTextTimer = null;
 let revealAbort = null;
-
-let responsePages = [];
-let currentPageIdx = 0;
 
 const AUTO_SUBMIT_MS = 2000;
 let autoSubmitTimer = null;
@@ -227,282 +220,64 @@ function dismissAnswer() {
     answerOverlay.classList.remove('closing', 'opening');
     answerOverlay.classList.add('hidden');
     answerTextEl.innerHTML = '';
-    answerTextEl.classList.remove('error', 'flipping');
-    transcribedEl.textContent = '';
-    pageNav.classList.add('hidden');
-    responsePages = [];
-    currentPageIdx = 0;
+    answerTextEl.classList.remove('error');
+    transcribedEl.innerHTML = '';
     status.textContent = '';
   };
   setTimeout(finish, 340);
 }
 
-answerOverlay.addEventListener('click', (e) => {
-  if (e.target.closest('.page-nav')) return;
-  dismissAnswer();
-});
+answerOverlay.addEventListener('click', () => dismissAnswer());
 answerOverlay.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') dismissAnswer();
-  else if (e.key === 'ArrowRight' && currentPageIdx < responsePages.length - 1) {
-    showPage(currentPageIdx + 1);
-  } else if (e.key === 'ArrowLeft' && currentPageIdx > 0) {
-    showPage(currentPageIdx - 1);
-  }
+  if (e.key === 'Escape' || e.key === 'Enter') dismissAnswer();
 });
 
-/* -------- Magical dissolve — ink burns into embers, smoke, and sparks --------
-   Realistic fire physics: embers start slow, fall a little, then buoyancy lifts
-   them upward with sideways wobble; color transitions hot-white → orange → red
-   as they cool; motion-blur trails via prev-position line segments; smoke wisps
-   rise behind; occasional bright spark bursts. Uses 'lighter' composite for
-   additive glow (no shadow blur — much faster on iPad). */
+/* -------- Gentle ink fade --------
+   No sparks, no embers — just the ink slowly absorbing into the parchment
+   while the book listens. Fade continues until the API returns, then a
+   short accelerated fade to clear on `finish()`. */
 
-function magicalDissolve() {
-  const rect = canvas.getBoundingClientRect();
+function gentleFade() {
   const snapshot = strokes.slice();
-
-  const allPoints = [];
-  for (const s of snapshot) {
-    for (const p of s.points) allPoints.push(p);
-  }
-
-  const embers = [];
-  const smoke = [];
-  const sparks = [];
-
   const startTime = performance.now();
-  let running = true;
+  const soakDuration = 4200;   // while waiting, ink slowly softens (not fully gone)
+  const finishDuration = 700;  // once answer arrives, remaining ink fades away
+
   let finishing = false;
   let finishStart = 0;
-  let finalBurstDone = false;
   let resolveFinish = null;
-  let lastFrame = startTime;
-  let emberAcc = 0, smokeAcc = 0, sparkAcc = 0;
-
-  function spawnEmber(intense) {
-    if (allPoints.length === 0) return;
-    const src = allPoints[Math.floor(Math.random() * allPoints.length)];
-    const size = 0.9 + Math.random() * 1.6 + (intense ? 0.6 : 0);
-    const e = {
-      x: src[0] + (Math.random() - 0.5) * 4,
-      y: src[1] + (Math.random() - 0.5) * 4,
-      px: 0, py: 0,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: 0.08 + Math.random() * 0.18,
-      life: 0,
-      maxLife: 1400 + Math.random() * 1400,
-      size,
-      buoyancy: 0.0009 + Math.random() * 0.0007,
-      wobble: Math.random() * Math.PI * 2,
-      wobbleSpeed: 0.0028 + Math.random() * 0.0032,
-    };
-    e.px = e.x; e.py = e.y;
-    embers.push(e);
-  }
-
-  function spawnSmoke() {
-    if (allPoints.length === 0) return;
-    const src = allPoints[Math.floor(Math.random() * allPoints.length)];
-    smoke.push({
-      x: src[0] + (Math.random() - 0.5) * 10,
-      y: src[1] + (Math.random() - 0.5) * 6,
-      vx: (Math.random() - 0.5) * 0.18,
-      vy: -0.07 - Math.random() * 0.1,
-      life: 0,
-      maxLife: 2000 + Math.random() * 1500,
-      size: 4 + Math.random() * 7,
-      opacity: 0.05 + Math.random() * 0.05,
-      wobble: Math.random() * Math.PI * 2,
-      wobbleSpeed: 0.002 + Math.random() * 0.001,
-    });
-  }
-
-  function spawnSpark() {
-    if (allPoints.length === 0) return;
-    const src = allPoints[Math.floor(Math.random() * allPoints.length)];
-    sparks.push({
-      x: src[0] + (Math.random() - 0.5) * 6,
-      y: src[1] + (Math.random() - 0.5) * 6,
-      life: 0,
-      maxLife: 220 + Math.random() * 160,
-      size: 6 + Math.random() * 10,
-    });
-  }
-
-  function emberColor(lt) {
-    if (lt < 0.3) {
-      const k = lt / 0.3;
-      return { r: 255, g: Math.round(240 - 60 * k), b: Math.round(160 - 100 * k) };
-    }
-    if (lt < 0.65) {
-      const k = (lt - 0.3) / 0.35;
-      return { r: Math.round(255 - 35 * k), g: Math.round(180 - 90 * k), b: Math.round(60 - 35 * k) };
-    }
-    const k = (lt - 0.65) / 0.35;
-    return { r: Math.round(220 - 180 * k), g: Math.round(90 - 70 * k), b: Math.round(25 - 20 * k) };
-  }
+  let done = false;
 
   function frame(now) {
-    if (!running && embers.length === 0 && smoke.length === 0 && sparks.length === 0) {
-      ctx.clearRect(0, 0, rect.width, rect.height);
-      if (resolveFinish) { const r = resolveFinish; resolveFinish = null; r(); }
-      return;
-    }
+    if (done) return;
+    const w = canvasRect.width || canvas.clientWidth;
+    const h = canvasRect.height || canvas.clientHeight;
+    ctx.clearRect(0, 0, w, h);
 
-    const dt = Math.min(50, now - lastFrame);
-    lastFrame = now;
-
-    ctx.clearRect(0, 0, rect.width, rect.height);
-
-    /* Ink base — slow fade while running, quick fade while finishing */
-    let inkAlpha;
+    let alpha;
     if (finishing) {
-      const ft = Math.min(1, (now - finishStart) / 850);
-      inkAlpha = 0.55 * (1 - ft);
+      const soakT = Math.min(1, (finishStart - startTime) / soakDuration);
+      const baseAlpha = 1 - 0.55 * soakT;
+      const ft = Math.min(1, (now - finishStart) / finishDuration);
+      alpha = baseAlpha * (1 - ft);
     } else {
-      const t = Math.min(1, (now - startTime) / 3500);
-      inkAlpha = 1 - 0.45 * t;
+      const t = Math.min(1, (now - startTime) / soakDuration);
+      alpha = 1 - 0.55 * t;
     }
-    if (inkAlpha > 0.02) {
-      ctx.globalAlpha = inkAlpha;
+
+    if (alpha > 0.02) {
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = '#2a1a08';
       for (const s of snapshot) drawStroke(s.points, s.pointerType);
       ctx.globalAlpha = 1;
     }
 
-    /* Final burst on entering finish state (one-shot) */
-    if (finishing && !finalBurstDone) {
-      for (let i = 0; i < 45; i++) spawnEmber(true);
-      for (let i = 0; i < 7; i++) spawnSpark();
-      for (let i = 0; i < 6; i++) spawnSmoke();
-      finalBurstDone = true;
+    if (finishing && (now - finishStart) >= finishDuration) {
+      ctx.clearRect(0, 0, w, h);
+      done = true;
+      if (resolveFinish) { const r = resolveFinish; resolveFinish = null; r(); }
+      return;
     }
-
-    /* Continuous spawn */
-    emberAcc += dt;
-    const emberInterval = finishing ? 4 : 8;
-    while (emberAcc >= emberInterval) {
-      emberAcc -= emberInterval;
-      if (running) spawnEmber(false);
-      else if (finishing && (now - finishStart) < 550) {
-        spawnEmber(true);
-        if (Math.random() < 0.35) spawnEmber(true);
-      }
-    }
-    smokeAcc += dt;
-    if (smokeAcc >= 70) {
-      smokeAcc = 0;
-      if (running) spawnSmoke();
-      else if (finishing && (now - finishStart) < 400) spawnSmoke();
-    }
-    sparkAcc += dt;
-    if (sparkAcc >= 260) {
-      sparkAcc = 0;
-      if (running && Math.random() < 0.5) spawnSpark();
-      else if (finishing && (now - finishStart) < 550) spawnSpark();
-    }
-
-    /* Smoke first (behind embers, normal composite) */
-    for (let i = smoke.length - 1; i >= 0; i--) {
-      const s = smoke[i];
-      s.life += dt;
-      const lt = s.life / s.maxLife;
-      if (lt >= 1) { smoke.splice(i, 1); continue; }
-      s.wobble += s.wobbleSpeed * dt;
-      s.vx += Math.sin(s.wobble) * 0.004;
-      s.vy -= dt * 0.00012;
-      s.x += s.vx * dt * 0.1;
-      s.y += s.vy * dt * 0.1;
-
-      const op = s.opacity * Math.sin(lt * Math.PI);
-      const sz = s.size * (1 + lt * 1.8);
-      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sz);
-      g.addColorStop(0, `rgba(45, 28, 15, ${op})`);
-      g.addColorStop(1, 'rgba(30, 20, 12, 0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, sz, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    /* Embers with additive glow (lighter composite) */
-    ctx.globalCompositeOperation = 'lighter';
-    for (let i = embers.length - 1; i >= 0; i--) {
-      const e = embers[i];
-      e.life += dt;
-      const lt = e.life / e.maxLife;
-      if (lt >= 1) { embers.splice(i, 1); continue; }
-
-      e.px = e.x; e.py = e.y;
-      e.vy -= e.buoyancy * dt;
-      e.vy += 0.00025 * dt;
-      e.wobble += e.wobbleSpeed * dt;
-      e.vx += Math.sin(e.wobble) * 0.012;
-      e.x += e.vx * dt * 0.15;
-      e.y += e.vy * dt * 0.15;
-
-      const alpha = lt < 0.08 ? lt / 0.08 : (lt < 0.9 ? 1 : (1 - lt) / 0.1);
-      const size = e.size * (1 - lt * 0.4);
-      const c = emberColor(lt);
-
-      /* Motion-blur trail from previous position */
-      ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha * 0.5})`;
-      ctx.lineWidth = Math.max(0.5, size * 1.1);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(e.px, e.py);
-      ctx.lineTo(e.x, e.y);
-      ctx.stroke();
-
-      /* Outer halo */
-      ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha * 0.28})`;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, size * 3.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      /* Middle glow */
-      ctx.fillStyle = `rgba(${Math.min(c.r + 30, 255)}, ${Math.min(c.g + 30, 255)}, ${Math.min(c.b + 20, 255)}, ${alpha * 0.55})`;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, size * 1.6, 0, Math.PI * 2);
-      ctx.fill();
-
-      /* Hot white core (only while hot) */
-      if (lt < 0.5) {
-        ctx.fillStyle = `rgba(255, 245, 210, ${alpha * (1 - lt * 2) * 0.9})`;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, size * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    /* Bright cross-flash sparks */
-    for (let i = sparks.length - 1; i >= 0; i--) {
-      const sp = sparks[i];
-      sp.life += dt;
-      const lt = sp.life / sp.maxLife;
-      if (lt >= 1) { sparks.splice(i, 1); continue; }
-      const alpha = Math.sin(lt * Math.PI);
-      const size = sp.size * (1 + lt * 0.5);
-
-      const g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, size);
-      g.addColorStop(0, `rgba(255, 255, 240, ${alpha})`);
-      g.addColorStop(0.4, `rgba(255, 220, 130, ${alpha * 0.7})`);
-      g.addColorStop(1, 'rgba(255, 220, 130, 0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, size, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = `rgba(255, 250, 220, ${alpha * 0.85})`;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(sp.x - size, sp.y);
-      ctx.lineTo(sp.x + size, sp.y);
-      ctx.moveTo(sp.x, sp.y - size);
-      ctx.lineTo(sp.x, sp.y + size);
-      ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'source-over';
 
     requestAnimationFrame(frame);
   }
@@ -514,7 +289,6 @@ function magicalDissolve() {
       resolveFinish = resolve;
       finishing = true;
       finishStart = performance.now();
-      setTimeout(() => { running = false; }, 850);
     }),
   };
 }
@@ -573,77 +347,6 @@ async function revealInk(el, text, signal) {
   }
 }
 
-/* -------- Multi-page response -------- */
-
-const MAX_CHARS_PER_PAGE = 360;
-
-function splitIntoPages(text, maxChars = MAX_CHARS_PER_PAGE) {
-  const trimmed = (text || '').trim();
-  if (trimmed.length <= maxChars) return [trimmed];
-
-  const parts = trimmed.match(/[^.!?\n]+[.!?\n]+|\S[^.!?\n]*$/g) || [trimmed];
-  const pages = [];
-  let cur = '';
-  for (const part of parts) {
-    if ((cur + part).length > maxChars && cur.length > 0) {
-      pages.push(cur.trim());
-      cur = part;
-    } else {
-      cur += part;
-    }
-  }
-  if (cur.trim()) pages.push(cur.trim());
-  return pages;
-}
-
-function updatePageNav() {
-  if (responsePages.length <= 1) {
-    pageNav.classList.add('hidden');
-    return;
-  }
-  pageNav.classList.remove('hidden');
-  pageIndicator.textContent = `${currentPageIdx + 1} / ${responsePages.length}`;
-  prevPageBtn.disabled = currentPageIdx === 0;
-  nextPageBtn.disabled = currentPageIdx === responsePages.length - 1;
-}
-
-async function showPage(idx) {
-  if (idx < 0 || idx >= responsePages.length) return;
-  if (revealAbort) revealAbort();
-
-  const previousIdx = currentPageIdx;
-  const isSameIndex = idx === previousIdx && answerTextEl.innerHTML !== '';
-
-  if (!isSameIndex && answerTextEl.innerHTML !== '' && bookPage) {
-    const direction = idx > previousIdx ? 'forward' : 'backward';
-    bookPage.classList.remove('flip-forward', 'flip-backward');
-    void bookPage.offsetWidth;
-    bookPage.classList.add(direction === 'forward' ? 'flip-forward' : 'flip-backward');
-    await sleep(360).catch(() => {});
-    bookPage.classList.remove('flip-forward', 'flip-backward');
-  }
-
-  currentPageIdx = idx;
-  updatePageNav();
-
-  answerTextEl.innerHTML = '';
-  answerTextEl.classList.remove('flipping');
-  if (answerScroll) answerScroll.scrollTop = 0;
-
-  const controller = new AbortController();
-  revealAbort = () => controller.abort();
-  revealInk(answerTextEl, responsePages[idx], controller.signal);
-}
-
-prevPageBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (currentPageIdx > 0) showPage(currentPageIdx - 1);
-});
-nextPageBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (currentPageIdx < responsePages.length - 1) showPage(currentPageIdx + 1);
-});
-
 /* -------- Ask -------- */
 
 async function askBook() {
@@ -660,7 +363,7 @@ async function askBook() {
 
   try {
     const image = exportImage();
-    const dissolve = magicalDissolve();
+    const dissolve = gentleFade();
 
     const res = await fetch('/api/ask', {
       method: 'POST',
@@ -678,16 +381,17 @@ async function askBook() {
     await dissolve.finish();
     strokes.length = 0;
 
-    transcribedEl.textContent = data.transcribed ? `you wrote — ${data.transcribed}` : '';
+    transcribedEl.textContent = data.transcribed || '';
+    /* Force the quillWrite animation to replay on repeat asks (browsers
+       don't always restart CSS animations when a hidden parent reappears). */
+    transcribedEl.style.animation = 'none';
+    void transcribedEl.offsetWidth;
+    transcribedEl.style.animation = '';
     confidenceEl.textContent = `${data.confidence || '—'} · via ${data.provider || 'gemini'}`;
     answerTextEl.classList.remove('error');
-
-    responsePages = splitIntoPages(data.answer || '');
-    currentPageIdx = 0;
     answerTextEl.innerHTML = '';
 
-    /* Remember this exchange so the next question inherits context.
-       Skip empty/error transcriptions to keep the history clean. */
+    /* Remember this exchange so the next question inherits context. */
     if (data.transcribed && data.answer) {
       conversationHistory.push({ question: data.transcribed, answer: data.answer });
       while (conversationHistory.length > MAX_HISTORY) conversationHistory.shift();
@@ -697,16 +401,20 @@ async function askBook() {
     answerOverlay.classList.remove('hidden');
     answerOverlay.classList.add('opening');
     answerOverlay.focus?.();
+    if (answerScroll) answerScroll.scrollTop = 0;
     setTimeout(() => answerOverlay.classList.remove('opening'), 900);
 
-    await showPage(0);
+    /* Hold a beat after the page opens so the reader can read their question
+       before the book's answer starts writing itself. */
+    await sleep(650).catch(() => {});
+
+    const controller = new AbortController();
+    revealAbort = () => controller.abort();
+    await revealInk(answerTextEl, data.answer || '', controller.signal);
   } catch (err) {
     hideSpellText();
     status.textContent = '';
     transcribedEl.textContent = '';
-    responsePages = [];
-    currentPageIdx = 0;
-    pageNav.classList.add('hidden');
     answerTextEl.classList.add('error');
     answerTextEl.textContent = err.message || 'Something went wrong.';
     answerOverlay.classList.remove('hidden');
