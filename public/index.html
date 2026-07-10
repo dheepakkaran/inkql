@@ -4,77 +4,76 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#0a0710" />
-  <title>Magic Book</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#f9f3e2" />
+  <title>My Journal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Kalam:wght@300;400;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="ambience" aria-hidden="true">
-    <span class="mote"></span><span class="mote"></span><span class="mote"></span>
-    <span class="mote"></span><span class="mote"></span><span class="mote"></span>
-  </div>
-
   <div class="app">
-    <header class="bar">
-      <button class="bar-btn" aria-label="Menu">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <header class="masthead">
+      <button id="menuBtn" class="menu-btn" aria-label="Start a new page">
+        <span></span><span></span><span></span>
       </button>
-      <h1>Magic Book</h1>
-      <button class="bar-btn ghost" aria-hidden="true" tabindex="-1">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-      </button>
+      <div class="masthead-title">
+        <h1>My Journal</h1>
+        <div class="masthead-sub"><span id="dateEl">—</span></div>
+      </div>
+      <div class="masthead-side"></div>
     </header>
 
-    <div class="page">
-      <div class="book" aria-hidden="true">
-        <div class="book-spine"></div>
-        <i class="page-curl page-curl-tl"></i>
-        <i class="page-curl page-curl-tr"></i>
-        <i class="page-curl page-curl-bl"></i>
-        <i class="page-curl page-curl-br"></i>
-      </div>
-
-      <div class="frame" aria-hidden="true">
-        <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
-      </div>
-      <canvas id="board"></canvas>
-
-      <div id="spellText" class="spell-text hidden" aria-hidden="true"></div>
-      <div id="followUp" class="follow-up hidden" aria-hidden="true"></div>
-
-      <div id="answerOverlay" class="answer-overlay hidden" role="button" tabindex="0" aria-label="Tap to write another">
-        <div id="bookPage" class="book-page">
-          <div class="book-page-inner">
-            <div class="page-ornament top" aria-hidden="true">✦ ❦ ✦</div>
-            <div id="answerScroll" class="answer-scroll">
-              <div class="qa-block">
-                <div class="qa-label">you wrote</div>
-                <div id="transcribed" class="qa-question"></div>
-                <div class="qa-divider" aria-hidden="true"><span>❦</span></div>
-                <div class="qa-label">the book answers</div>
-                <div id="answerText" class="qa-answer"></div>
-              </div>
-            </div>
-            <div class="page-ornament bottom" aria-hidden="true">✦ ❦ ✦</div>
+    <main id="feed" class="feed">
+      <div class="notebook">
+        <div class="notebook-margin" aria-hidden="true"></div>
+        <div id="feedInner" class="feed-inner">
+          <div id="emptyState" class="empty-state">
+            <p>The page is blank.</p>
+            <p class="empty-hint">Write your question below.</p>
           </div>
         </div>
-        <div class="tap-hint">tap outside to write another</div>
+        <div id="thinking" class="thinking hidden" aria-hidden="true">
+          <div class="thinking-row">
+            <span class="entry-label">Q</span>
+            <span id="thinkingText" class="thinking-text">the journal listens…</span>
+          </div>
+        </div>
       </div>
-    </div>
+    </main>
 
-    <footer class="controls">
-      <button id="undo" class="tool">Undo</button>
-      <button id="clear" class="tool">Clear</button>
-      <button id="preview" class="tool">Preview</button>
-      <div class="spacer"></div>
-      <span id="status" class="status"></span>
-      <button id="ask" class="primary">Ask</button>
-    </footer>
+    <section class="composer">
+      <div class="composer-inner">
+        <div class="canvas-wrap">
+          <canvas id="board"></canvas>
+          <div id="canvasHint" class="canvas-hint">write here</div>
+        </div>
+        <div class="composer-tools">
+          <button id="undo" class="tool">Undo</button>
+          <button id="clear" class="tool">Clear</button>
+          <button id="preview" class="tool">Preview</button>
+          <div class="spacer"></div>
+          <span id="status" class="status"></span>
+          <button id="ask" class="primary">Ask</button>
+        </div>
+      </div>
+    </section>
   </div>
+
+  <template id="entryTemplate">
+    <article class="entry">
+      <div class="entry-time"></div>
+      <div class="entry-row entry-q-row">
+        <span class="entry-label">Q</span>
+        <div class="entry-text entry-q"></div>
+      </div>
+      <div class="entry-row entry-a-row">
+        <span class="entry-label">A</span>
+        <div class="entry-text entry-a"></div>
+      </div>
+    </article>
+  </template>
 
   <span id="confidence" hidden></span>
 

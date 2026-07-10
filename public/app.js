@@ -2,37 +2,37 @@ import { getStroke } from 'https://esm.sh/perfect-freehand@1.2.2';
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d', { desynchronized: true });
-const status = document.getElementById('status');
-const answerOverlay = document.getElementById('answerOverlay');
-const transcribedEl = document.getElementById('transcribed');
+const statusEl = document.getElementById('status');
 const confidenceEl = document.getElementById('confidence');
-const answerTextEl = document.getElementById('answerText');
-const spellTextEl = document.getElementById('spellText');
-const answerScroll = document.getElementById('answerScroll');
-const bookPage = document.getElementById('bookPage');
-const followUpEl = document.getElementById('followUp');
+const feedEl = document.getElementById('feed');
+const feedInner = document.getElementById('feedInner');
+const emptyState = document.getElementById('emptyState');
+const entryTemplate = document.getElementById('entryTemplate');
+const thinkingEl = document.getElementById('thinking');
+const thinkingTextEl = document.getElementById('thinkingText');
+const canvasHint = document.getElementById('canvasHint');
+const dateEl = document.getElementById('dateEl');
+const menuBtn = document.getElementById('menuBtn');
 
-/* Track most recent Q&A pairs (client-side) so the book can answer follow-up
-   questions with context. Kept short to stay under model context limits. */
+/* Track most recent Q&A pairs (client-side) so follow-up questions inherit
+   context. Kept short to stay under model context limits. */
 const MAX_HISTORY = 4;
 const conversationHistory = [];
 
-const SPELL_PHRASES = [
-  'the ink stirs',
-  'the parchment listens',
-  'ancient pages turn',
-  'whispers rise from the ink',
-  'the quill searches',
-  'deciphering your hand',
-  'the book remembers',
-  'consulting the magic',
+const THINKING_PHRASES = [
+  'the journal listens…',
+  'reading your handwriting…',
+  'considering…',
+  'writing an answer…',
+  'the pen is thinking…',
 ];
 
 const strokes = [];
 let current = null;
 let isAsking = false;
-let spellTextTimer = null;
+let thinkingTimer = null;
 let revealAbort = null;
+let entryCount = 0;
 
 const AUTO_SUBMIT_MS = 2000;
 let autoSubmitTimer = null;
@@ -46,7 +46,7 @@ function cancelAutoSubmit() {
 function scheduleAutoSubmit() {
   cancelAutoSubmit();
   if (strokes.length === 0 || isAsking) return;
-  status.textContent = `${strokes.length} stroke${strokes.length === 1 ? '' : 's'}`;
+  statusEl.textContent = `${strokes.length} stroke${strokes.length === 1 ? '' : 's'}`;
   autoSubmitTimer = setTimeout(() => {
     autoSubmitTimer = null;
     askBook();
@@ -54,8 +54,8 @@ function scheduleAutoSubmit() {
 }
 
 const STROKE_OPTIONS = {
-  size: 3.5,
-  thinning: 0.6,
+  size: 2.5,
+  thinning: 0.55,
   smoothing: 0.5,
   streamline: 0.5,
   simulatePressure: true,
@@ -91,21 +91,17 @@ function getPoint(evt) {
 
 /* On iPadOS Apple Pencil, `e.buttons` sometimes reports 0 mid-stroke and
    `pointerleave` fires spuriously. We only trust pointerdown → pointerup /
-   pointercancel with a captured pointerId. That + a cached bounding rect is
-   what fixed strokes not appearing on iPad. */
+   pointercancel with a captured pointerId. */
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   cancelAutoSubmit();
-  if (!answerOverlay.classList.contains('hidden')) {
-    dismissAnswer();
-    return;
-  }
+  hideCanvasHint();
   refreshCanvasRect();
   try { canvas.setPointerCapture(e.pointerId); } catch {}
   activePointerId = e.pointerId;
   current = { points: [getPoint(e)], pointerType: e.pointerType };
   strokes.push(current);
-  status.textContent = 'writing';
+  statusEl.textContent = 'writing';
   redraw();
 });
 
@@ -121,13 +117,12 @@ function endStroke(e) {
   if (e && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
   current = null;
   activePointerId = null;
-  status.textContent = `${strokes.length} stroke${strokes.length === 1 ? '' : 's'}`;
+  statusEl.textContent = `${strokes.length} stroke${strokes.length === 1 ? '' : 's'}`;
   scheduleAutoSubmit();
 }
 canvas.addEventListener('pointerup', endStroke);
 canvas.addEventListener('pointercancel', endStroke);
 
-/* Block iOS default gestures inside the writing surface */
 ['touchstart', 'touchmove', 'gesturestart', 'gesturechange', 'gestureend'].forEach((t) => {
   canvas.addEventListener(t, (e) => e.preventDefault(), { passive: false });
 });
@@ -151,12 +146,11 @@ function redraw() {
   const w = canvasRect.width || canvas.clientWidth;
   const h = canvasRect.height || canvas.clientHeight;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#2a1a08';
+  ctx.fillStyle = '#1c2a4a';
   for (const s of strokes) drawStroke(s.points, s.pointerType);
 }
 
-/* Render strokes to an offscreen canvas with baked paper background.
-   Renders from `strokes` array, independent of live canvas — safe during dissolve. */
+/* Render strokes to an offscreen canvas with baked notebook background. */
 function exportImage() {
   const w = canvasRect.width || canvas.clientWidth;
   const h = canvasRect.height || canvas.clientHeight;
@@ -166,82 +160,77 @@ function exportImage() {
   off.height = Math.round(h * dpr);
   const octx = off.getContext('2d');
   octx.scale(dpr, dpr);
-  octx.fillStyle = '#efe1c0';
+  octx.fillStyle = '#fdfaf1';
   octx.fillRect(0, 0, w, h);
-  octx.fillStyle = '#1c1c1e';
+  octx.fillStyle = '#1c2a4a';
   for (const s of strokes) drawStroke(s.points, s.pointerType, octx);
   return off.toDataURL('image/png');
 }
 
-/* -------- Buttons -------- */
+function hideCanvasHint() {
+  if (canvasHint) canvasHint.classList.add('hidden');
+}
+function showCanvasHint() {
+  if (canvasHint && strokes.length === 0) canvasHint.classList.remove('hidden');
+}
+
+/* -------- Toolbar buttons -------- */
 
 document.getElementById('undo').addEventListener('click', () => {
   cancelAutoSubmit();
   strokes.pop();
   redraw();
-  status.textContent = `${strokes.length} stroke${strokes.length === 1 ? '' : 's'}`;
+  statusEl.textContent = strokes.length ? `${strokes.length} stroke${strokes.length === 1 ? '' : 's'}` : '';
   if (strokes.length > 0) scheduleAutoSubmit();
+  else showCanvasHint();
 });
 
 document.getElementById('clear').addEventListener('click', () => {
   cancelAutoSubmit();
   strokes.length = 0;
   redraw();
-  status.textContent = '';
+  statusEl.textContent = '';
+  showCanvasHint();
 });
 
-const menuBtn = document.querySelector('.bar-btn:not(.ghost)');
-if (menuBtn) {
-  menuBtn.addEventListener('click', () => {
-    if (conversationHistory.length === 0) {
-      status.textContent = 'a fresh page';
-    } else {
-      conversationHistory.length = 0;
-      updateFollowUpHint();
-      status.textContent = 'a new chapter begins';
-    }
-    setTimeout(() => { if (status.textContent === 'a new chapter begins' || status.textContent === 'a fresh page') status.textContent = ''; }, 1600);
-  });
-  menuBtn.setAttribute('aria-label', 'Start a new chapter');
-  menuBtn.title = 'Start a new chapter';
-}
-
 document.getElementById('preview').addEventListener('click', () => {
+  if (strokes.length === 0) { statusEl.textContent = 'write something first'; return; }
   const url = exportImage();
   const w = window.open('');
-  if (!w) { status.textContent = 'popup blocked'; return; }
+  if (!w) { statusEl.textContent = 'popup blocked'; return; }
   w.document.write(`<title>Preview</title><body style="margin:0;background:#f2f2f7;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${url}" style="max-width:100%;max-height:100vh"/></body>`);
 });
 
-function dismissAnswer() {
-  if (revealAbort) revealAbort();
-  answerOverlay.classList.add('closing');
-  const finish = () => {
-    answerOverlay.classList.remove('closing', 'opening');
-    answerOverlay.classList.add('hidden');
-    answerTextEl.innerHTML = '';
-    answerTextEl.classList.remove('error');
-    transcribedEl.innerHTML = '';
-    status.textContent = '';
-  };
-  setTimeout(finish, 340);
+if (menuBtn) {
+  menuBtn.addEventListener('click', () => {
+    if (conversationHistory.length === 0 && feedInner.querySelectorAll('.entry').length === 0) {
+      flashStatus('a fresh page');
+      return;
+    }
+    conversationHistory.length = 0;
+    feedInner.innerHTML = '';
+    if (emptyState) {
+      feedInner.appendChild(emptyState);
+      emptyState.classList.remove('hidden');
+    }
+    entryCount = 0;
+    flashStatus('new page');
+  });
 }
 
-answerOverlay.addEventListener('click', () => dismissAnswer());
-answerOverlay.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' || e.key === 'Enter') dismissAnswer();
-});
+function flashStatus(text, ms = 1500) {
+  statusEl.textContent = text;
+  setTimeout(() => { if (statusEl.textContent === text) statusEl.textContent = ''; }, ms);
+}
 
-/* -------- Gentle ink fade --------
-   No sparks, no embers — just the ink slowly absorbing into the parchment
-   while the book listens. Fade continues until the API returns, then a
-   short accelerated fade to clear on `finish()`. */
+/* -------- Gentle ink fade during API call --------
+   No sparks — the ink just softens as the journal thinks. */
 
 function gentleFade() {
   const snapshot = strokes.slice();
   const startTime = performance.now();
-  const soakDuration = 4200;   // while waiting, ink slowly softens (not fully gone)
-  const finishDuration = 700;  // once answer arrives, remaining ink fades away
+  const soakDuration = 4200;
+  const finishDuration = 550;
 
   let finishing = false;
   let finishStart = 0;
@@ -257,17 +246,17 @@ function gentleFade() {
     let alpha;
     if (finishing) {
       const soakT = Math.min(1, (finishStart - startTime) / soakDuration);
-      const baseAlpha = 1 - 0.55 * soakT;
+      const baseAlpha = 1 - 0.5 * soakT;
       const ft = Math.min(1, (now - finishStart) / finishDuration);
       alpha = baseAlpha * (1 - ft);
     } else {
       const t = Math.min(1, (now - startTime) / soakDuration);
-      alpha = 1 - 0.55 * t;
+      alpha = 1 - 0.5 * t;
     }
 
     if (alpha > 0.02) {
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#2a1a08';
+      ctx.fillStyle = '#1c2a4a';
       for (const s of snapshot) drawStroke(s.points, s.pointerType);
       ctx.globalAlpha = 1;
     }
@@ -293,30 +282,74 @@ function gentleFade() {
   };
 }
 
-/* -------- Spell phrases (rotating hint while dissolving) -------- */
+/* -------- Thinking indicator (placeholder entry that appears in feed) -------- */
 
-function showSpellText() {
-  let i = Math.floor(Math.random() * SPELL_PHRASES.length);
-  spellTextEl.textContent = SPELL_PHRASES[i];
-  spellTextEl.classList.remove('hidden');
-  clearInterval(spellTextTimer);
-  spellTextTimer = setInterval(() => {
-    i = (i + 1) % SPELL_PHRASES.length;
-    spellTextEl.style.opacity = '0';
-    setTimeout(() => {
-      spellTextEl.textContent = SPELL_PHRASES[i];
-      spellTextEl.style.opacity = '';
-    }, 300);
-  }, 2400);
+function showThinking(questionText) {
+  if (!thinkingEl) return;
+  thinkingEl.classList.remove('hidden');
+  cycleThinkingPhrase();
+  clearInterval(thinkingTimer);
+  thinkingTimer = setInterval(cycleThinkingPhrase, 2400);
+  scrollFeedToBottom();
+}
+function cycleThinkingPhrase() {
+  if (!thinkingTextEl) return;
+  const next = THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
+  thinkingTextEl.style.opacity = '0';
+  setTimeout(() => {
+    thinkingTextEl.textContent = next;
+    thinkingTextEl.style.opacity = '';
+  }, 250);
+}
+function hideThinking() {
+  if (thinkingEl) thinkingEl.classList.add('hidden');
+  clearInterval(thinkingTimer);
+  thinkingTimer = null;
 }
 
-function hideSpellText() {
-  clearInterval(spellTextTimer);
-  spellTextTimer = null;
-  spellTextEl.classList.add('hidden');
+/* -------- Feed / entry rendering -------- */
+
+function formatTime(d) {
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
 }
 
-/* -------- Char-by-char ink reveal -------- */
+function scrollFeedToBottom(smooth = true) {
+  requestAnimationFrame(() => {
+    feedEl.scrollTo({ top: feedEl.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  });
+}
+
+function appendEntry({ question, provider, confidence }) {
+  if (emptyState && !emptyState.classList.contains('hidden')) {
+    emptyState.classList.add('hidden');
+  }
+  entryCount += 1;
+
+  const frag = entryTemplate.content.cloneNode(true);
+  const article = frag.querySelector('.entry');
+  const timeEl = frag.querySelector('.entry-time');
+  const qEl = frag.querySelector('.entry-q');
+  const aEl = frag.querySelector('.entry-a');
+
+  timeEl.textContent = `${formatTime(new Date())} · Entry ${entryCount}`;
+  qEl.textContent = question || '(illegible)';
+
+  if (thinkingEl && !thinkingEl.classList.contains('hidden')) {
+    feedInner.insertBefore(article, thinkingEl.nextSibling); // shouldn't happen, but safe
+  }
+  feedInner.appendChild(article);
+
+  return { article, aEl };
+}
+
+function markEntryError(aEl, message) {
+  aEl.classList.add('error');
+  aEl.textContent = message || 'Something went wrong.';
+}
+
+/* -------- Char-by-char pencil reveal for the answer -------- */
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms);
@@ -324,15 +357,19 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
 });
 
 function pauseFor(char) {
-  if (char === ' ') return 30;
-  if (char === ',' || char === ';' || char === ':') return 220;
-  if (char === '.' || char === '!' || char === '?') return 340;
-  if (char === '\n') return 260;
-  return 45 + Math.random() * 30;
+  if (char === ' ') return 22;
+  if (char === ',' || char === ';' || char === ':') return 160;
+  if (char === '.' || char === '!' || char === '?') return 260;
+  if (char === '\n') return 200;
+  return 28 + Math.random() * 22;
 }
 
 async function revealInk(el, text, signal) {
   el.innerHTML = '';
+  const shouldFollowScroll = () => {
+    const nearBottom = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight < 120;
+    return nearBottom;
+  };
   for (const ch of text) {
     if (signal?.aborted) return;
     if (ch === '\n') {
@@ -343,6 +380,7 @@ async function revealInk(el, text, signal) {
       span.textContent = ch;
       el.appendChild(span);
     }
+    if (shouldFollowScroll()) scrollFeedToBottom(false);
     try { await sleep(pauseFor(ch), signal); } catch { return; }
   }
 }
@@ -353,13 +391,13 @@ async function askBook() {
   cancelAutoSubmit();
   if (isAsking) return;
   if (strokes.length === 0) {
-    status.textContent = 'write something first';
+    statusEl.textContent = 'write something first';
     return;
   }
 
   isAsking = true;
-  status.textContent = '';
-  showSpellText();
+  statusEl.textContent = '';
+  showThinking();
 
   try {
     const image = exportImage();
@@ -377,69 +415,61 @@ async function askBook() {
       throw err;
     }
 
-    hideSpellText();
+    hideThinking();
     await dissolve.finish();
     strokes.length = 0;
+    showCanvasHint();
 
-    transcribedEl.textContent = data.transcribed || '';
-    /* Force the quillWrite animation to replay on repeat asks (browsers
-       don't always restart CSS animations when a hidden parent reappears). */
-    transcribedEl.style.animation = 'none';
-    void transcribedEl.offsetWidth;
-    transcribedEl.style.animation = '';
     confidenceEl.textContent = `${data.confidence || '—'} · via ${data.provider || 'gemini'}`;
-    answerTextEl.classList.remove('error');
-    answerTextEl.innerHTML = '';
 
-    /* Remember this exchange so the next question inherits context. */
+    const { aEl } = appendEntry({
+      question: data.transcribed,
+      provider: data.provider,
+      confidence: data.confidence,
+    });
+
     if (data.transcribed && data.answer) {
       conversationHistory.push({ question: data.transcribed, answer: data.answer });
       while (conversationHistory.length > MAX_HISTORY) conversationHistory.shift();
     }
-    updateFollowUpHint();
 
-    answerOverlay.classList.remove('hidden');
-    answerOverlay.classList.add('opening');
-    answerOverlay.focus?.();
-    if (answerScroll) answerScroll.scrollTop = 0;
-    setTimeout(() => answerOverlay.classList.remove('opening'), 900);
+    scrollFeedToBottom();
 
-    /* Hold a beat after the page opens so the reader can read their question
-       before the book's answer starts writing itself. */
-    await sleep(650).catch(() => {});
+    /* Small pause so the reader sees their question written down first,
+       then the "A" appears letter by letter like a pencil answering. */
+    await sleep(500).catch(() => {});
 
     const controller = new AbortController();
     revealAbort = () => controller.abort();
-    await revealInk(answerTextEl, data.answer || '', controller.signal);
+    await revealInk(aEl, data.answer || '', controller.signal);
   } catch (err) {
-    hideSpellText();
-    status.textContent = '';
-    transcribedEl.textContent = '';
-    answerTextEl.classList.add('error');
-    answerTextEl.textContent = err.message || 'Something went wrong.';
-    answerOverlay.classList.remove('hidden');
+    hideThinking();
+    const { aEl } = appendEntry({ question: '(the pen slipped)' });
+    markEntryError(aEl, err.message || 'Something went wrong.');
+    strokes.length = 0;
     redraw();
+    showCanvasHint();
   } finally {
     isAsking = false;
-  }
-}
-
-function updateFollowUpHint() {
-  if (!followUpEl) return;
-  if (conversationHistory.length === 0) {
-    followUpEl.classList.add('hidden');
-    followUpEl.textContent = '';
-  } else {
-    followUpEl.classList.remove('hidden');
-    followUpEl.textContent = `chapter ${conversationHistory.length} · ask a follow-up`;
+    statusEl.textContent = '';
+    scrollFeedToBottom();
   }
 }
 
 document.getElementById('ask').addEventListener('click', askBook);
 
-/* Keep the canvas backing store in sync with layout. On iPad, the initial
-   getBoundingClientRect() may fire before flex layout resolves — a
-   ResizeObserver gives us the real dimensions the moment they change. */
+/* -------- Date in masthead -------- */
+
+function updateDate() {
+  if (!dateEl) return;
+  const d = new Date();
+  const opts = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+  dateEl.textContent = d.toLocaleDateString(undefined, opts);
+}
+updateDate();
+
+/* -------- Canvas sizing (ResizeObserver + rAF for iPad layout timing) -------- */
+
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 250));
 if (typeof ResizeObserver !== 'undefined') {
@@ -448,4 +478,4 @@ if (typeof ResizeObserver !== 'undefined') {
 }
 requestAnimationFrame(() => requestAnimationFrame(resize));
 resize();
-status.textContent = '';
+statusEl.textContent = '';
